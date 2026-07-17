@@ -4,7 +4,7 @@
 
 struct CMake_Options
 {
-    std::string version;
+    std::string version = "3.28";
     std::string cxx_compiler;
     std::string c_compiler;
     std::string default_src_dir;
