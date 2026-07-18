@@ -13,7 +13,6 @@
 #include <rz/string/utils.hpp>
 
 #include "options.hpp"
-#include "rz/defs/defs.hpp"
 
 void logger(const std::string& info)
 {
@@ -32,6 +31,7 @@ int main(int argc, char **argv)
 
     app.require_subcommand();
 
+    CMake_Options finalOptions(*savedOptions);
     {
         auto* createCmd = app.add_subcommand("create", "Create a new CMake project (in this directory)");
         std::string_view name;
@@ -41,8 +41,16 @@ int main(int argc, char **argv)
         auto* execFlag = createCmd->add_flag("-e,--executable", executable, "Add 'add_executable({PROJ_NAME})' to the CMakeLists");
         auto* slibFlag = createCmd->add_flag("-s,--static", slib, "Add 'add_library({PROJ_NAME} STATIC)' to the CMakeLists");
         execFlag->excludes(slibFlag);
+        createCmd->add_option("--cxx_std", finalOptions.cxx_std, "Override the C++ standard"); //->check(CLI::IsMember({11, 14, 17, 20, 23, 26}));
+        createCmd->add_option("--c_std", finalOptions.c_std, "Override the C standard");
+        createCmd->add_option("--cmake_version", finalOptions.version, "Override the CMake required version");
+        createCmd->add_option("--cxx_compiler", finalOptions.cxx_compiler, "Override the C++ compiler");
+        createCmd->add_option("--c_compiler", finalOptions.c_compiler, "Override the C compiler");
+        createCmd->add_option("--src_dir", finalOptions.default_src_dir, "Override the PROJ_SRC CMake variable");
+        createCmd->add_flag("--export,!--noexport", finalOptions.export_compile, "Override the export compile commands setting");
         createCmd->callback([&]() {
             using namespace std::filesystem;
+
             path projPath = name;
             if(exists(projPath)){
                 std::println("Path {} already exists!", name);
@@ -56,22 +64,28 @@ int main(int argc, char **argv)
 
             std::ofstream cmakelists(projPath / "CMakeLists.txt");
             if(cmakelists.is_open()) {
-                cmakelists << std::format("cmake_minimum_required(VERSION {})\n", savedOptions->version);
+                cmakelists << std::format("cmake_minimum_required(VERSION {})\n", finalOptions.version);
 
-                if(!savedOptions->cxx_compiler.empty())
-                    cmakelists << std::format("set(CMAKE_CXX_COMPILER {})\n", savedOptions->cxx_compiler);
-                if(!savedOptions->c_compiler.empty())
-                    cmakelists << std::format("set(CMAKE_C_COMPILER {})\n", savedOptions->c_compiler);
+                if(!finalOptions.cxx_compiler.empty())
+                    cmakelists << std::format("set(CMAKE_CXX_COMPILER {})\n", finalOptions.cxx_compiler);
+                if(!finalOptions.c_compiler.empty())
+                    cmakelists << std::format("set(CMAKE_C_COMPILER {})\n", finalOptions.c_compiler);
 
-                if(savedOptions->cxx_std > 0)
-                    cmakelists << std::format("set(CMAKE_CXX_STANDARD {})\n", savedOptions->cxx_std);
-                if(savedOptions->c_std > 0)
-                    cmakelists << std::format("set(CMAKE_C_STANDARD {})\n", savedOptions->c_std);
+                if(finalOptions.cxx_std > 0)
+                    cmakelists << std::format("set(CMAKE_CXX_STANDARD {})\n", finalOptions.cxx_std);
+                if(finalOptions.c_std > 0)
+                    cmakelists << std::format("set(CMAKE_C_STANDARD {})\n", finalOptions.c_std);
 
-                if(savedOptions->export_compile)
+                if(finalOptions.export_compile)
                     cmakelists << "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n";
 
                 cmakelists << std::format("project({})\n\n\n", name);
+
+                if(!finalOptions.default_src_dir.empty()) {
+                    cmakelists << "set(PROJ_SRC\n# Your source files here...\n)\n";
+                    cmakelists <<
+                        std::format("list(TRANSFORM PROJ_SRC PREPEND \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/\")", finalOptions.default_src_dir);
+                }
 
                 if(executable)
                     cmakelists << std::format("add_executable({})\n", name);
@@ -79,7 +93,6 @@ int main(int argc, char **argv)
                     cmakelists << std::format("add_library({} STATIC)\n", name);
 
             }
-
         });
     }
 
