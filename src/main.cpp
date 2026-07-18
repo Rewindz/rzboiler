@@ -140,9 +140,9 @@ int main(int argc, char **argv)
             else if(name == "default_src_dir")
                 savedOptions->default_src_dir = value;
             else if(name == "export_compile") {
-                if(iequal_many(value, {"t", "true", "1"}))
+                if(iequal_many(value, {"t", "true", "1", "on"}))
                     savedOptions->export_compile = true;
-                else if (iequal_many(value, {"f", "false", "0"}))
+                else if (iequal_many(value, {"f", "false", "0", "off"}))
                     savedOptions->export_compile = false;
                 else {
                     std::println("The value {} is not valid for {}!", value, name);
