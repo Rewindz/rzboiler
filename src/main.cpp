@@ -13,6 +13,7 @@
 #include <rz/string/utils.hpp>
 
 #include "options.hpp"
+#include "valid_std.hpp"
 
 void logger(const std::string& info)
 {
@@ -51,7 +52,7 @@ int main(int argc, char **argv)
         createCmd->callback([&]() {
             using namespace std::filesystem;
 
-            path projPath = name;
+            const path projPath = name;
             if(exists(projPath)){
                 std::println("Path {} already exists!", name);
                 return;
@@ -62,7 +63,8 @@ int main(int argc, char **argv)
                 return;
             }
 
-            std::ofstream cmakelists(projPath / "CMakeLists.txt");
+            const path cmakepath = projPath / "CMakeLists.txt";
+            std::ofstream cmakelists(cmakepath);
             if(cmakelists.is_open()) {
                 cmakelists << std::format("cmake_minimum_required(VERSION {})\n", finalOptions.version);
 
@@ -72,9 +74,9 @@ int main(int argc, char **argv)
                     cmakelists << std::format("set(CMAKE_C_COMPILER {})\n", finalOptions.c_compiler);
 
                 if(finalOptions.cxx_std > 0)
-                    cmakelists << std::format("set(CMAKE_CXX_STANDARD {})\n", finalOptions.cxx_std);
+                    cmakelists << std::format("set(CMAKE_CXX_STANDARD {:02})\n", finalOptions.cxx_std);
                 if(finalOptions.c_std > 0)
-                    cmakelists << std::format("set(CMAKE_C_STANDARD {})\n", finalOptions.c_std);
+                    cmakelists << std::format("set(CMAKE_C_STANDARD {:02})\n", finalOptions.c_std);
 
                 if(finalOptions.export_compile)
                     cmakelists << "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n";
@@ -92,6 +94,8 @@ int main(int argc, char **argv)
                 if(slib)
                     cmakelists << std::format("add_library({} STATIC)\n", name);
 
+            } else {
+                std::println("Failed to open file: {}!", cmakepath.string());
             }
         });
     }
@@ -125,6 +129,33 @@ int main(int argc, char **argv)
     }
 
     {
+        auto* clearCmd = app.add_subcommand("clear", "Clear a boiler config setting");
+        std::string_view name;
+        clearCmd->add_option("name", name, "Setting name")->required();
+        clearCmd->callback([&savedOptions, &name]() {
+            if(name == "version"){
+                savedOptions->version = std::string();
+            } else if(name == "cxx_compiler") {
+                savedOptions->cxx_compiler = std::string();
+            } else if(name == "c_compiler") {
+                savedOptions->c_compiler = std::string();
+            } else if(name == "default_src_dir") {
+                savedOptions->default_src_dir = std::string();
+            } else if(name == "export_compile") {
+                savedOptions->export_compile = false;
+            } else if(name == "cxx_std") {
+                savedOptions->cxx_std = -1;
+            } else if(name == "c_std") {
+                savedOptions->c_std = -1;
+            } else {
+                std::println("{} is not a valid setting name!", name);
+                return;
+            }
+            savedOptions.Save();
+        });
+    }
+
+    {
         auto* setCmd = app.add_subcommand("set", "Change a boiler config setting");
         std::string_view name, value;
         setCmd->add_option("name", name, "Setting name")->required();
@@ -150,25 +181,33 @@ int main(int argc, char **argv)
                 }
             }
             else if(name == "cxx_std") {
-                // TODO: maybe check for valid verson numbers?
                 try {
-                    savedOptions->cxx_std = std::stoi(std::string(value));;
+                    auto parsed = std::stoi(std::string(value));
+                    if(check_std(cxx_std, parsed))
+                        savedOptions->cxx_std = parsed;
+                    else {
+                        std::println("{} is not a valid C++ standard!", parsed);
+                    }
                 } catch (const std::exception& e) {
                     std::println("{} is not a valid number!", value);
                     return;
                 }
             }
             else if(name == "c_std") {
-                // TODO: maybe check for valid verson numbers?
                 try{
-                    savedOptions->c_std = std::stoi(std::string(value));;
+                    auto parsed = std::stoi(std::string(value));;
+                    if(check_std(cxx_std, parsed))
+                        savedOptions->cxx_std = parsed;
+                    else {
+                        std::println("{} is not a valid C standard!", parsed);
+                    }
                 } catch (const std::exception& e) {
                     std::println("{} is not a valid number!", value);
                     return;
                 }
             }
             else {
-                std::println("{} is not a valid option name!", name);
+                std::println("{} is not a valid setting name!", name);
                 return;
             }
             savedOptions.Save();
