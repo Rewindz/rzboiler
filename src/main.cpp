@@ -36,8 +36,8 @@ int main(int argc, char **argv)
     {
         auto* createCmd = app.add_subcommand("create", "Create a new CMake project (in this directory)");
         std::string_view name;
-        bool executable, slib;
-        executable = slib = false;
+        bool executable, slib, inplace;
+        executable = slib = inplace = false;
         createCmd->add_option("name", name, "Name of the project to create.")->required();
         auto* execFlag = createCmd->add_flag("-e,--executable", executable, "Add 'add_executable({PROJ_NAME})' to the CMakeLists");
         auto* slibFlag = createCmd->add_flag("-s,--static", slib, "Add 'add_library({PROJ_NAME} STATIC)' to the CMakeLists");
@@ -49,18 +49,21 @@ int main(int argc, char **argv)
         createCmd->add_option("--c_compiler", finalOptions.c_compiler, "Override the C compiler");
         createCmd->add_option("--src_dir", finalOptions.default_src_dir, "Override the PROJ_SRC CMake variable");
         createCmd->add_flag("--export,!--noexport", finalOptions.export_compile, "Override the export compile commands setting");
+        createCmd->add_flag("-i,--inplace", inplace, "Place the CMakeLists.txt in the current directory");
         createCmd->callback([&]() {
             using namespace std::filesystem;
 
-            const path projPath = name;
-            if(exists(projPath)){
-                std::println("Path {} already exists!", name);
-                return;
-            }
+            const path projPath = (inplace ? "." : name);
+            if(!inplace) {
+                if(exists(projPath)){
+                    std::println("Path {} already exists!", name);
+                    return;
+                }
 
-            if(!create_directory(projPath)){
-                std::println("Failed to create project directory {}!", name);
-                return;
+                if(!create_directory(projPath)){
+                    std::println("Failed to create project directory {}!", name);
+                    return;
+                }
             }
 
             const path cmakepath = projPath / "CMakeLists.txt";
